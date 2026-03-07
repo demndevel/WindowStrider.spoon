@@ -106,6 +106,12 @@ local function createWindowSwitcher(apps)
 
         local windows = wf_getWindowList(filter, cycleState.reversed)
 
+        -- launch the app if no windows are found
+        if #windows == 0 then
+            hs.application.open(apps[1])
+            return
+        end
+
         if cycling then
             local focusedId = focused:id()
             assert(focusedId ~= nil)
