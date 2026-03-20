@@ -4,6 +4,8 @@
 ---
 
 local obj = {}
+local lastBinding = nil
+
 obj.__index = obj
 
 obj.name = "WindowStrider"
@@ -74,7 +76,7 @@ end
 
 --- @param apps table
 --- @return function cycleWindows
-local function createWindowSwitcher(apps)
+local function createWindowSwitcher(apps, config)
     local filter = keep(hs.window.filter.new(function(window)
         local application = window:application()
         if not application then return false end
@@ -107,7 +109,7 @@ local function createWindowSwitcher(apps)
         local windows = wf_getWindowList(filter, cycleState.reversed)
 
         -- launch the app if no windows are found
-        if #windows == 0 then
+        if #windows == 0 and config.launchIfClosed then
             hs.application.open(apps[1])
             return
         end
@@ -151,9 +153,17 @@ end
 --- @param key string The key for the hotkey (e.g., "2")
 --- @param apps table A list of application bundle IDs (e.g., {"com.brave.Browser"})
 function obj:bindHotkey(mods, key, apps)
-    local cycleWindows = createWindowSwitcher(apps)
+    local config = { launchIfClosed = false }
+    local b = { mods = mods, key = key, apps = apps, config = config }
+    local cycleWindows = createWindowSwitcher(apps, config)
+    lastBinding = b
     keep(hs.hotkey.bind(mods, key, cycleWindows))
     return self
+end
+
+function obj:launchIfClosed()
+    lastBinding.config.launchIfClosed = true
+    return obj
 end
 
 --- Binds a hotkey for dynamic app pinning.
@@ -165,12 +175,13 @@ end
 function obj:bindPinHotkey(mods, key, recordMod)
     local pinnedBundleID = nil
     local cycleWindows = nil
-
+    local config = { launchIfClosed = false }
     local recordModifiers = {}
     for _, mod in ipairs(mods) do
         tinsert(recordModifiers, mod)
     end
     tinsert(recordModifiers, recordMod)
+    lastBinding = { config = config }
 
     keep(hs.hotkey.bind(recordModifiers, key, function()
         local focused = hs.window.focusedWindow()
@@ -186,7 +197,7 @@ function obj:bindPinHotkey(mods, key, recordMod)
         end
 
         pinnedBundleID = app:bundleID()
-        cycleWindows = createWindowSwitcher({pinnedBundleID})
+        cycleWindows = createWindowSwitcher({pinnedBundleID}, config)
 
         prettyAlert("📌", app:name() .. " → " .. formatHotkey(mods, key))
     end))
